@@ -15,9 +15,13 @@
  */
 package controllers;
 
+import com.arpnetworking.jackson.BuilderDeserializer;
 import com.arpnetworking.metrics.portal.alerts.AlertRepository;
 import com.arpnetworking.steno.Logger;
 import com.arpnetworking.steno.LoggerFactory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import com.google.common.net.HttpHeaders;
@@ -25,14 +29,19 @@ import com.google.inject.Inject;
 import models.internal.Alert;
 import models.internal.AlertQuery;
 import models.internal.Context;
+import models.internal.Quantity;
 import models.internal.QueryResult;
+import models.internal.impl.DefaultAlert;
+import models.internal.impl.DefaultQuantity;
 import models.view.PagedContainer;
 import models.view.Pagination;
+import net.sf.oval.exception.ConstraintsViolatedException;
 import play.Configuration;
 import play.libs.Json;
 import play.mvc.Controller;
 import play.mvc.Result;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,7 +59,7 @@ public class AlertController extends Controller {
     /**
      * Public constructor.
      *
-     * @param configuration Instance of Play's <code>Configuration</code>.
+     * @param configuration   Instance of Play's <code>Configuration</code>.
      * @param alertRepository Instance of <code>AlertRepository</code>.
      */
     @Inject
@@ -59,14 +68,61 @@ public class AlertController extends Controller {
     }
 
     /**
+     * Adds or updates an alert in the alert repository.
+     * If a valid UUID is passed, it will update the corresponding alert if it exists or create an alert with this id.
+     * If no id is passed, it will generate an id.
+     *
+     * @param alertId The <code>String</code> representation of the id of the alert to be updated.
+     * @return Success if the alert was updated successfully, an error code otherwise.
+     */
+    public Result addOrUpdate(final String alertId) {
+        UUID id = UUID.randomUUID();
+        try {
+            if (alertId != null) {
+                id = UUID.fromString(alertId);
+            }
+        } catch (final IllegalArgumentException e) {
+            return badRequest("Invalid alert id");
+        }
+        final JsonNode jsonBody = request().body().asJson();
+        if (jsonBody == null) {
+            return badRequest("Request must have a non-empty body");
+        }
+        Alert alert;
+        try {
+            final DefaultAlert.Builder alertBuilder = OBJECT_MAPPER.readValue(jsonBody.toString(), DefaultAlert.Builder.class);
+            alert = alertBuilder.setId(id).build();
+        } catch (final IOException | ConstraintsViolatedException e) {
+            LOGGER.error()
+                    .setMessage("Failed to deserialize to an alert.")
+                    .setThrowable(e)
+                    .log();
+            return badRequest("Invalid request body.");
+        }
+
+        try {
+            _alertRepository.addOrUpdateAlert(alert);
+            // CHECKSTYLE.OFF: IllegalCatch - Convert any exception to 500
+        } catch (final Exception e) {
+            // CHECKSTYLE.ON: IllegalCatch
+            LOGGER.error()
+                    .setMessage("Failed to create an alert.")
+                    .setThrowable(e)
+                    .log();
+            return internalServerError();
+        }
+        return ok();
+    }
+
+    /**
      * Query for alerts.
      *
      * @param contains The text to search for. Optional.
-     * @param context The context of the alert. Optional.
-     * @param cluster The cluster of the statistic to evaluate as part of the alert. Optional.
-     * @param service The service of the statistic to evaluate as part of the alert. Optional.
-     * @param limit The maximum number of results to return. Optional.
-     * @param offset The number of results to skip. Optional.
+     * @param context  The context of the alert. Optional.
+     * @param cluster  The cluster of the statistic to evaluate as part of the alert. Optional.
+     * @param service  The service of the statistic to evaluate as part of the alert. Optional.
+     * @param limit    The maximum number of results to return. Optional.
+     * @param offset   The number of results to skip. Optional.
      * @return <code>Result</code> paginated matching alerts.
      */
     // CHECKSTYLE.OFF: ParameterNameCheck - Names must match query parameters.
@@ -202,4 +258,13 @@ public class AlertController extends Controller {
 
     private static final int DEFAULT_MAX_LIMIT = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(AlertController.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    static {
+        final SimpleModule module = new SimpleModule("AlertControlller");
+        module.addDeserializer(
+                Quantity.class,
+                BuilderDeserializer.of(DefaultQuantity.Builder.class));
+        OBJECT_MAPPER.registerModule(module);
+    }
 }

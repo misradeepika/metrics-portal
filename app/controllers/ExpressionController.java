@@ -18,6 +18,8 @@ package controllers;
 import com.arpnetworking.metrics.portal.expressions.ExpressionRepository;
 import com.arpnetworking.steno.Logger;
 import com.arpnetworking.steno.LoggerFactory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import com.google.common.net.HttpHeaders;
@@ -25,13 +27,16 @@ import com.google.inject.Inject;
 import models.internal.Expression;
 import models.internal.ExpressionQuery;
 import models.internal.QueryResult;
+import models.internal.impl.DefaultExpression;
 import models.view.PagedContainer;
 import models.view.Pagination;
+import net.sf.oval.exception.ConstraintsViolatedException;
 import play.Configuration;
 import play.libs.Json;
 import play.mvc.Controller;
 import play.mvc.Result;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,7 +54,7 @@ public class ExpressionController extends Controller {
     /**
      * Public constructor.
      *
-     * @param configuration Instance of Play's <code>Configuration</code>.
+     * @param configuration        Instance of Play's <code>Configuration</code>.
      * @param expressionRepository Instance of <code>ExpressionRepository</code>.
      */
     @Inject
@@ -58,13 +63,61 @@ public class ExpressionController extends Controller {
     }
 
     /**
-     * Query for expressions.
+     * Adds or updates an expression in the expression repository.
+     * If a valid UUID is passed, it will update the corresponding expression if it exists or create a new one with this id.
+     * If no id is passed, it will generate an id.
      *
+     * @param expressionId The <code>String</code> representation of the id of the expression to be updated.
+     * @return Success if the expression was updated successfully, an error code otherwise.
+     */
+    public Result addOrUpdate(final String expressionId) {
+        UUID id = UUID.randomUUID();
+        try {
+            if (expressionId != null) {
+                id = UUID.fromString(expressionId);
+            }
+        } catch (final IllegalArgumentException e) {
+            return badRequest("Invalid expression id");
+        }
+        final JsonNode jsonBody = request().body().asJson();
+        if (jsonBody == null) {
+            return badRequest("Request must have a non-empty body");
+        }
+        Expression expression;
+        try {
+            final DefaultExpression.Builder exprBuilder = OBJECT_MAPPER.readValue(jsonBody.toString(), DefaultExpression.Builder.class);
+            expression = exprBuilder.setId(id).build();
+        } catch (final IOException | ConstraintsViolatedException e) {
+            LOGGER.error()
+                    .setMessage("Failed to deserialize to an expression.")
+                    .setThrowable(e)
+                    .log();
+            return badRequest("Invalid request body.");
+        }
+
+        try {
+            _expressionRepository.addOrUpdateExpression(expression);
+            // CHECKSTYLE.OFF: IllegalCatch - Convert any exception to 500
+        } catch (final Exception e) {
+            // CHECKSTYLE.ON: IllegalCatch
+            LOGGER.error()
+                    .setMessage("Failed to create an expression.")
+                    .setThrowable(e)
+                    .log();
+            return internalServerError();
+        }
+        return ok();
+    }
+
+    /**
+     * Query for expressions.
+     * <p>
      * * @param contains The text to search for. Optional.
+     *
      * @param cluster The cluster of the statistic to evaluate as part of the exression. Optional.
      * @param service The service of the statistic to evaluate as part of the expression. Optional.
-     * @param limit The maximum number of results to return. Optional.
-     * @param offset The number of results to skip. Optional.
+     * @param limit   The maximum number of results to return. Optional.
+     * @param offset  The number of results to skip. Optional.
      * @return <code>Result</code> paginated matching expressions.
      */
     // CHECKSTYLE.OFF: ParameterNameCheck - Names must match query parameters.
@@ -177,4 +230,5 @@ public class ExpressionController extends Controller {
 
     private static final int DEFAULT_MAX_LIMIT = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(ExpressionController.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 }
