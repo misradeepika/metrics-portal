@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-CREATE TABLE IF NOT EXISTS portal.hosts (
-    id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS portal.expressions (
+    id UUID PRIMARY KEY,
     version INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
-    name VARCHAR(255) NOT NULL,
-    cluster VARCHAR(255),
-    metrics_software_state VARCHAR(255) NOT NULL
+    cluster VARCHAR(255) NOT NULL,
+    service VARCHAR(255) NOT NULL,
+    metric VARCHAR(255) NOT NULL,
+    script VARCHAR(255) NOT NULL
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS hosts_name_idx ON portal.hosts (name);
-CREATE INDEX IF NOT EXISTS hosts_cluster_idx ON portal.hosts (cluster);
-CREATE INDEX IF NOT EXISTS hosts_metrics_software_state_idx ON portal.hosts (metrics_software_state);
