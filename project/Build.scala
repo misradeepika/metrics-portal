@@ -274,6 +274,8 @@ object ApplicationBuild extends Build {
             <Class name="~controllers\.Reverse.*"/>
           </Match>
         </FindBugsFilter>
-      )
+      ),
+
+      javaOptions in Test += "-Dconfig.file=conf/portal.application.conf"
     )
 }
