@@ -21,23 +21,21 @@ import com.avaje.ebean.annotation.UpdatedTimestamp;
 
 import java.sql.Timestamp;
 import javax.persistence.Column;
-import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
+import javax.persistence.MappedSuperclass;
 import javax.persistence.OneToOne;
-import javax.persistence.Table;
 import javax.persistence.Version;
 
 /**
- * Data model for extensions data in alerts.
+ * Abstract model class for extensions data for alerts.
  *
  * @author Deepika Misra (deepika at groupon dot com)
  */
-@Entity
-@Table(name = "nagios_extensions", schema = "portal")
-public class NagiosExtension extends Model {
+@MappedSuperclass
+public abstract class AlertExtension extends Model {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -59,18 +57,6 @@ public class NagiosExtension extends Model {
     @OneToOne
     @JoinColumn(name = "id")
     private Alert _alert;
-
-    @Column(name = "severity")
-    private String _severity;
-
-    @Column(name = "notify")
-    private String _notify;
-
-    @Column(name = "max_check_attempts")
-    private int _maxCheckAttempts;
-
-    @Column(name = "freshness_threshold_in_seconds")
-    private int _freshnessThresholdInSeconds;
 
     public Alert getAlert() {
         return _alert;
@@ -102,37 +88,5 @@ public class NagiosExtension extends Model {
 
     public void setUpdatedAt(final Timestamp value) {
         _updatedAt = value;
-    }
-
-    public String getSeverity() {
-        return _severity;
-    }
-
-    public void setSeverity(final String value) {
-        _severity = value;
-    }
-
-    public String getNotify() {
-        return _notify;
-    }
-
-    public void setNotify(final String value) {
-        _notify = value;
-    }
-
-    public int getMaxCheckAttempts() {
-        return _maxCheckAttempts;
-    }
-
-    public void setMaxCheckAttempts(final int value) {
-        _maxCheckAttempts = value;
-    }
-
-    public int getFreshnessThresholdInSeconds() {
-        return _freshnessThresholdInSeconds;
-    }
-
-    public void setFreshnessThresholdInSeconds(final int value) {
-        _freshnessThresholdInSeconds = value;
     }
 }
